@@ -9,10 +9,11 @@ from jupyter_client.localinterfaces import public_ips
 from tljh.hooks import hookimpl
 from traitlets import default
 
+from .builder import JOVYAN_UID
 from .images import list_images, client
 
-# TODO: make this configurable
-VOLUMES_PATH = "/volumes/users"
+VOLUMES_PATH = "/home"
+WORK_FOLDER = "work"
 
 # Default CPU period
 # See: https://docs.docker.com/config/containers/resource_constraints/#limit-a-containers-access-to-memory#configure-the-default-cfs-scheduler
@@ -20,18 +21,18 @@ CPU_PERIOD = 100_000
 
 
 # See: https://github.com/jupyterhub/jupyterhub/tree/master/examples/bootstrap-script#example-1---create-a-user-directory
-def create_pre_spawn_hook(base_path, uid=1100):
+def create_pre_spawn_hook(base_path, uid=JOVYAN_UID, mode=0o755):
     def pre_spawn_hook(spawner):
-
-        # create user directory if it does not exist
         username = spawner.user.name
-        volume_path = os.path.join(base_path, username)
-        os.makedirs(volume_path, 0o755, exist_ok=True)
+        # create user directory if it does not exist
+        volume_path = os.path.join(base_path, username, WORK_FOLDER)
+        os.makedirs(volume_path, mode=mode, exist_ok=True)
         # use jovyan id (used when building the image with repo2docker)
         shutil.chown(volume_path, user=uid)
+        os.chmod(volume_path, mode=mode)
 
         # set the image limits
-        image = client.images.get(spawner.user_options.get('image'))
+        image = client.images.get(spawner.user_options.get("image"))
         mem_limit = image.labels.get("plasmabio.mem_limit", None)
         cpu_limit = image.labels.get("plasmabio.cpu_limit", None)
         spawner.mem_limit = mem_limit or spawner.mem_limit
@@ -89,7 +90,9 @@ def tljh_custom_jupyterhub_config(c):
     c.DockerSpawner.default_url = "/lab"
     c.DockerSpawner.cmd = ["jupyterhub-singleuser"]
     c.DockerSpawner.volumes = {
-        os.path.join(VOLUMES_PATH, "{username}"): "/home/jovyan/work"
+        os.path.join(VOLUMES_PATH, "{username}", WORK_FOLDER): os.path.join(
+            "/home/jovyan", WORK_FOLDER
+        ),
     }
     c.DockerSpawner.mem_limit = "2G"
 
@@ -97,8 +100,8 @@ def tljh_custom_jupyterhub_config(c):
     cpu_limit = 2
     c.DockerSpawner.cpu_limit = cpu_limit
     c.DockerSpawner.extra_host_config = {
-        'cpu_period': CPU_PERIOD,
-        'cpu_quota': int(float(CPU_PERIOD) * cpu_limit),
+        "cpu_period": CPU_PERIOD,
+        "cpu_quota": int(float(CPU_PERIOD) * cpu_limit),
     }
     c.DockerSpawner.args = ["--ResourceUseDisplay.track_cpu_percent=True"]
 
