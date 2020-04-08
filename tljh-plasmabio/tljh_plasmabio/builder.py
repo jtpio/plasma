@@ -13,6 +13,8 @@ from jupyterhub.services.auth import HubAuthenticated
 from tornado import web, escape
 from tornado.log import app_log
 
+JOVYAN_UID = 1100
+
 client = docker.from_env()
 
 
@@ -44,7 +46,7 @@ def build_image(repo, ref, memory=None, cpu=None):
         "--user-name",
         "jovyan",
         "--user-id",
-        "1100",
+        JOVYAN_UID,
         "--no-run",
         "--image-name",
         image_name,
